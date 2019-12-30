@@ -1,0 +1,33 @@
+#!/bin/bash
+
+echo "in test"
+
+cd ~
+
+curl -sL https://deb.nodesource.com/setup_8.x -o nodesource_setup.sh
+
+sudo bash nodesource_setup.sh
+
+sudo apt install nodejs
+
+nodejs -v
+
+npm -v
+
+sudo apt install build-essential
+
+wget https://gist.githubusercontent.com/wizardnet972/2a31d65a47e93968afb8adfb42a35a60/raw/e05796aaa74df894f79c7f12a12cd923fdc5e0f2/express  -O app.js
+
+sudo npm install pm2@latest -g
+
+sudo pm2 start app.js
+
+sudo pm2 startup systemd
+
+sudo apt update
+
+sudo apt install nginx
+
+sudo ufw allow 'Nginx HTTP'
+
+systemctl status nginx
