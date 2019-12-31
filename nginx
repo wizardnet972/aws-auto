@@ -1,0 +1,59 @@
+echo -n "Enter Domain: " 
+read domain
+
+outfile=$(cat <<EOF
+    server {                                                                                                  
+        listen       80;                                                                                      
+        server_name  $domain;                                                                               
+                                                                                                            
+        location / {                                                                                         
+            proxy_pass http://localhost:3000;                                                                     
+            proxy_http_version 1.1;                                                                          
+            proxy_set_header Upgrade $http_upgrade;                                                          
+            proxy_set_header Connection 'upgrade';                                                           
+            proxy_set_header Host $host;                                                                     
+            proxy_cache_bypass $http_upgrade;                                                                
+        }                                                                                                   
+                                                                                                            
+        error_page   500 502 503 504  /50x.html;                                                              
+        location = /50x.html {                                                                                
+            root   /usr/share/nginx/html;                                                                     
+        }                                                                                                     
+    }                                                                                                         
+EOF
+)
+
+echo -n "Enter Subdomain: " 
+read subdomain
+
+IFS=' ' read -ra ADDR <<< "$subdomain"
+for i in "${ADDR[@]}"; do
+
+outfile+=$(cat <<EOF
+    
+  
+     server {                                                                                                  
+        listen       80;                                                                                      
+        server_name  $i;                                                                               
+                                                                                                            
+        location / {                                                                                         
+            proxy_pass http://localhost:3000;                                                                     
+            proxy_http_version 1.1;                                                                          
+            proxy_set_header Upgrade $http_upgrade;                                                          
+            proxy_set_header Connection 'upgrade';                                                           
+            proxy_set_header Host $host;                                                                     
+            proxy_cache_bypass $http_upgrade;                                                                
+        }                                                                                                      
+    }
+
+         
+EOF
+)
+
+done
+
+
+cat > "nginx.conf" <<EOF
+$outfile
+EOF
+
