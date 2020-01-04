@@ -1,0 +1,108 @@
+############# LOAD BALANCER #########################
+
+resource "aws_elb" "web" {
+  name = "nginx-elb"
+
+  subnets         = ["${aws_subnet.subnet1.id}", "${aws_subnet.subnet2.id}"]
+  security_groups = ["${aws_security_group.elb-sg.id}"]
+  instances       = ["${aws_instance.nginx1.id}", "${aws_instance.nginx2.id}"]
+
+  listener {
+    instance_port     = 80
+    instance_protocol = "http"
+    lb_port           = 80
+    lb_protocol       = "http"
+  }
+}
+
+###################### INSTANCES nginx1 ###################
+
+resource "aws_instance" "nginx1" {
+  ami                    = data.aws_ami.aws-linux.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.subnet1.id
+  vpc_security_group_ids = ["${aws_security_group.nginx-sg.id}"]
+  key_name               = var.key_name
+
+  connection {
+    type        = "ssh"
+    host        = self.public_ip
+    user        = "ec2-user"
+    private_key = file(var.private_key_path)
+
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo yum install nginx -y",
+      "sudo service nginx start",
+      "echo '<html><head><title>Blue Team Server</title></head><body style=\"background-color:#1F778D\"><p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:28px;\">Blue Team</span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
+    ]
+  }
+}
+
+###################### INSTANCES nginx2 ###################
+
+resource "aws_instance" "nginx2" {
+  ami                    = data.aws_ami.aws-linux.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.subnet2.id
+  vpc_security_group_ids = ["${aws_security_group.nginx-sg.id}"]
+  key_name               = var.key_name
+
+  connection {
+    type        = "ssh"
+    host        = self.public_ip
+    user        = "ec2-user"
+    private_key = file(var.private_key_path)
+
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo yum install nginx -y",
+      "sudo service nginx start",
+      "echo '<html><head><title>Green Team Server</title></head><body style=\"background-color:#77A032\"><p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:28px;\">Green Team</span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
+    ]
+  }
+}
+
+###################### INSTANCES backend ###################
+
+resource "aws_instance" "backend" {
+  ami                    = "ami-0d5d9d301c853a04a"
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.subnet3.id
+  vpc_security_group_ids = ["${aws_security_group.nginx-sg.id}"]
+  key_name               = var.key_name
+
+  connection {
+    type        = "ssh"
+    host        = self.public_ip
+    user        = "ubuntu"
+    private_key = file(var.private_key_path)
+
+  }
+  
+   provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt-get install python sshpass -y",
+    ]
+  }
+}
+
+######################## Ansible setup ########################
+
+ resource "null_resource" "ansible-main" {
+ provisioner "local-exec" {
+  command = <<EOT
+       sleep 100;
+        > jenkins-ci.ini;
+        echo "[jenkins-ci]"| tee -a jenkins-ci.ini;
+        export ANSIBLE_HOST_KEY_CHECKING=False;
+        echo "${aws_instance.backend.public_ip}" | tee -a jenkins-ci.ini;
+        /usr/bin/ansible-playbook -e  sshKey=${var.private_key_path} -i jenkins-ci.ini ./ansible/setup-backend.yaml -u ubuntu -v
+    EOT
+}
+}
